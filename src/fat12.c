@@ -620,6 +620,13 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
         return status;
     }
 
+    status = read_BPB(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
+    }
+
     return FAT12_ERR_NOT_IMPLEMENTED;
 }
 
