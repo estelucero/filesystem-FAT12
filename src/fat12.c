@@ -17,46 +17,56 @@
 #define FAT12_BAD_CLUSTER 0x0FF7u
 #define MAX_PATH_COMPONENTS 64u
 
-static uint16_t read_le16(const uint8_t *p) {
+static uint16_t read_le16(const uint8_t *p)
+{
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
-static uint32_t read_le32(const uint8_t *p) {
+static uint32_t read_le32(const uint8_t *p)
+{
     return (uint32_t)p[0] |
            ((uint32_t)p[1] << 8) |
            ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
 }
 
-static bool read_exact(FILE *fp, uint64_t offset, void *buffer, size_t size) {
-    if (offset > (uint64_t)INT64_MAX) {
+static bool read_exact(FILE *fp, uint64_t offset, void *buffer, size_t size)
+{
+    if (offset > (uint64_t)INT64_MAX)
+    {
         return false;
     }
-    if (fseeko(fp, (off_t)offset, SEEK_SET) != 0) {
+    if (fseeko(fp, (off_t)offset, SEEK_SET) != 0)
+    {
         return false;
     }
     return fread(buffer, 1, size, fp) == size;
 }
 
-static uint64_t sector_offset(const Fat12Fs *fs, uint32_t absolute_sector) {
+static uint64_t sector_offset(const Fat12Fs *fs, uint32_t absolute_sector)
+{
     return (uint64_t)absolute_sector * fs->bytes_per_sector;
 }
 
-static Fat12Status cluster_offset(const Fat12Fs *fs, uint16_t cluster, uint64_t *offset) {
-    if (cluster < 2 || (uint32_t)cluster >= fs->cluster_count + 2u) {
+static Fat12Status cluster_offset(const Fat12Fs *fs, uint16_t cluster, uint64_t *offset)
+{
+    if (cluster < 2 || (uint32_t)cluster >= fs->cluster_count + 2u)
+    {
         return FAT12_ERR_RANGE;
     }
     uint32_t sector = fs->first_data_sector + ((uint32_t)cluster - 2u) * fs->sectors_per_cluster;
     uint64_t byte_offset = sector_offset(fs, sector);
     uint64_t cluster_size = (uint64_t)fs->bytes_per_sector * fs->sectors_per_cluster;
-    if (byte_offset > fs->image_size || cluster_size > fs->image_size - byte_offset) {
+    if (byte_offset > fs->image_size || cluster_size > fs->image_size - byte_offset)
+    {
         return FAT12_ERR_RANGE;
     }
     *offset = byte_offset;
     return FAT12_OK;
 }
 
-static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t *value) {
+static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t *value)
+{
     /* TODO 2: calcular el desplazamiento de una entrada FAT12 y extraer sus 12 bits.
      * Debe distinguir clusters pares e impares, validar limites y leer desde la primera FAT.
      */
@@ -66,40 +76,50 @@ static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t 
     return FAT12_ERR_NOT_IMPLEMENTED;
 }
 
-static bool is_eoc(uint16_t value) {
+static bool is_eoc(uint16_t value)
+{
     return value >= FAT12_EOC_MIN && value <= 0x0FFFu;
 }
 
-static bool valid_short_char(unsigned char c) {
-    if (isalnum(c)) {
+static bool valid_short_char(unsigned char c)
+{
+    if (isalnum(c))
+    {
         return true;
     }
     const char *extra = "_$~!#%&-{}()@'`";
     return strchr(extra, (int)c) != NULL;
 }
 
-static Fat12Status path_component_to_raw(const char *component, uint8_t raw[11]) {
+static Fat12Status path_component_to_raw(const char *component, uint8_t raw[11])
+{
     size_t len = strlen(component);
-    if (len == 0 || len > 12) {
+    if (len == 0 || len > 12)
+    {
         return FAT12_ERR_FORMAT;
     }
     const char *dot = strrchr(component, '.');
     size_t stem_len = dot ? (size_t)(dot - component) : len;
     size_t ext_len = dot ? len - stem_len - 1u : 0u;
-    if (stem_len < 1 || stem_len > 8 || ext_len > 3) {
+    if (stem_len < 1 || stem_len > 8 || ext_len > 3)
+    {
         return FAT12_ERR_FORMAT;
     }
     memset(raw, ' ', 11);
-    for (size_t i = 0; i < stem_len; ++i) {
+    for (size_t i = 0; i < stem_len; ++i)
+    {
         unsigned char c = (unsigned char)component[i];
-        if (!valid_short_char(c)) {
+        if (!valid_short_char(c))
+        {
             return FAT12_ERR_FORMAT;
         }
         raw[i] = (uint8_t)toupper(c);
     }
-    for (size_t i = 0; i < ext_len; ++i) {
+    for (size_t i = 0; i < ext_len; ++i)
+    {
         unsigned char c = (unsigned char)dot[1 + i];
-        if (!valid_short_char(c)) {
+        if (!valid_short_char(c))
+        {
             return FAT12_ERR_FORMAT;
         }
         raw[8 + i] = (uint8_t)toupper(c);
@@ -107,39 +127,50 @@ static Fat12Status path_component_to_raw(const char *component, uint8_t raw[11])
     return FAT12_OK;
 }
 
-static void raw_to_display_name(const uint8_t raw[11], bool deleted, char output[13]) {
+static void raw_to_display_name(const uint8_t raw[11], bool deleted, char output[13])
+{
     char stem[9];
     char ext[4];
     memcpy(stem, raw, 8);
     memcpy(ext, raw + 8, 3);
     stem[8] = '\0';
     ext[3] = '\0';
-    for (int i = 7; i >= 0 && stem[i] == ' '; --i) {
+    for (int i = 7; i >= 0 && stem[i] == ' '; --i)
+    {
         stem[i] = '\0';
     }
-    for (int i = 2; i >= 0 && ext[i] == ' '; --i) {
+    for (int i = 2; i >= 0 && ext[i] == ' '; --i)
+    {
         ext[i] = '\0';
     }
-    if (deleted && stem[0] != '\0') {
+    if (deleted && stem[0] != '\0')
+    {
         stem[0] = '?';
     }
-    if (ext[0] != '\0') {
+    if (ext[0] != '\0')
+    {
         (void)snprintf(output, 13, "%s.%s", stem, ext);
-    } else {
+    }
+    else
+    {
         (void)snprintf(output, 13, "%s", stem);
     }
 }
 
-static bool is_dot_entry(const uint8_t raw[11]) {
+static bool is_dot_entry(const uint8_t raw[11])
+{
     return raw[0] == '.' && (raw[1] == ' ' || raw[1] == '.');
 }
 
-static Fat12Status parse_dir_entry(const uint8_t raw[32], uint64_t offset, Fat12DirEntry *entry) {
-    if (raw[0] == 0x00u) {
+static Fat12Status parse_dir_entry(const uint8_t raw[32], uint64_t offset, Fat12DirEntry *entry)
+{
+    if (raw[0] == 0x00u)
+    {
         return FAT12_ERR_NOT_FOUND;
     }
     uint8_t attr = raw[11];
-    if (attr == ATTR_LONG_NAME || (attr & ATTR_VOLUME_ID) != 0u) {
+    if (attr == ATTR_LONG_NAME || (attr & ATTR_VOLUME_ID) != 0u)
+    {
         return FAT12_ERR_FORMAT;
     }
     memset(entry, 0, sizeof(*entry));
@@ -157,28 +188,36 @@ static Fat12Status parse_dir_entry(const uint8_t raw[32], uint64_t offset, Fat12
 typedef Fat12Status (*DirVisitor)(const Fat12DirEntry *entry, void *ctx, bool *stop);
 
 static Fat12Status visit_directory(const Fat12Fs *fs, bool root, uint16_t first_cluster,
-                                   DirVisitor visitor, void *ctx) {
-    if (root) {
+                                   DirVisitor visitor, void *ctx)
+{
+    if (root)
+    {
         uint64_t base = sector_offset(fs, fs->first_root_sector);
-        for (uint32_t i = 0; i < fs->root_entry_count; ++i) {
+        for (uint32_t i = 0; i < fs->root_entry_count; ++i)
+        {
             uint8_t raw[DIR_ENTRY_SIZE];
             uint64_t offset = base + (uint64_t)i * DIR_ENTRY_SIZE;
-            if (!read_exact(fs->fp, offset, raw, sizeof(raw))) {
+            if (!read_exact(fs->fp, offset, raw, sizeof(raw)))
+            {
                 return FAT12_ERR_IO;
             }
-            if (raw[0] == 0x00u) {
+            if (raw[0] == 0x00u)
+            {
                 return FAT12_OK;
             }
-            if (raw[11] == ATTR_LONG_NAME || (raw[11] & ATTR_VOLUME_ID) != 0u || is_dot_entry(raw)) {
+            if (raw[11] == ATTR_LONG_NAME || (raw[11] & ATTR_VOLUME_ID) != 0u || is_dot_entry(raw))
+            {
                 continue;
             }
             Fat12DirEntry entry;
-            if (parse_dir_entry(raw, offset, &entry) != FAT12_OK) {
+            if (parse_dir_entry(raw, offset, &entry) != FAT12_OK)
+            {
                 continue;
             }
             bool stop = false;
             Fat12Status status = visitor(&entry, ctx, &stop);
-            if (status != FAT12_OK || stop) {
+            if (status != FAT12_OK || stop)
+            {
                 return status;
             }
         }
@@ -187,55 +226,68 @@ static Fat12Status visit_directory(const Fat12Fs *fs, bool root, uint16_t first_
 
     uint16_t cluster = first_cluster;
     uint8_t *seen = calloc(fs->cluster_count + 2u, 1);
-    if (!seen) {
+    if (!seen)
+    {
         return FAT12_ERR_IO;
     }
     uint32_t cluster_size = (uint32_t)fs->bytes_per_sector * fs->sectors_per_cluster;
     uint8_t *buffer = malloc(cluster_size);
-    if (!buffer) {
+    if (!buffer)
+    {
         free(seen);
         return FAT12_ERR_IO;
     }
     Fat12Status result = FAT12_OK;
-    while (true) {
-        if (cluster < 2 || (uint32_t)cluster >= fs->cluster_count + 2u || seen[cluster]) {
+    while (true)
+    {
+        if (cluster < 2 || (uint32_t)cluster >= fs->cluster_count + 2u || seen[cluster])
+        {
             result = FAT12_ERR_FORMAT;
             break;
         }
         seen[cluster] = 1;
         uint64_t offset;
         result = cluster_offset(fs, cluster, &offset);
-        if (result != FAT12_OK || !read_exact(fs->fp, offset, buffer, cluster_size)) {
+        if (result != FAT12_OK || !read_exact(fs->fp, offset, buffer, cluster_size))
+        {
             result = result == FAT12_OK ? FAT12_ERR_IO : result;
             break;
         }
-        for (uint32_t pos = 0; pos + DIR_ENTRY_SIZE <= cluster_size; pos += DIR_ENTRY_SIZE) {
+        for (uint32_t pos = 0; pos + DIR_ENTRY_SIZE <= cluster_size; pos += DIR_ENTRY_SIZE)
+        {
             const uint8_t *raw = buffer + pos;
-            if (raw[0] == 0x00u) {
+            if (raw[0] == 0x00u)
+            {
                 goto done;
             }
-            if (raw[11] == ATTR_LONG_NAME || (raw[11] & ATTR_VOLUME_ID) != 0u || is_dot_entry(raw)) {
+            if (raw[11] == ATTR_LONG_NAME || (raw[11] & ATTR_VOLUME_ID) != 0u || is_dot_entry(raw))
+            {
                 continue;
             }
             Fat12DirEntry entry;
-            if (parse_dir_entry(raw, offset + pos, &entry) != FAT12_OK) {
+            if (parse_dir_entry(raw, offset + pos, &entry) != FAT12_OK)
+            {
                 continue;
             }
             bool stop = false;
             result = visitor(&entry, ctx, &stop);
-            if (result != FAT12_OK || stop) {
+            if (result != FAT12_OK || stop)
+            {
                 goto done;
             }
         }
         uint16_t next;
         result = read_fat_entry(fs, cluster, &next);
-        if (result != FAT12_OK) {
+        if (result != FAT12_OK)
+        {
             break;
         }
-        if (is_eoc(next)) {
+        if (is_eoc(next))
+        {
             break;
         }
-        if (next == 0u || next == FAT12_BAD_CLUSTER || (next >= 0x0FF0u && next < FAT12_EOC_MIN)) {
+        if (next == 0u || next == FAT12_BAD_CLUSTER || (next >= 0x0FF0u && next < FAT12_EOC_MIN))
+        {
             result = FAT12_ERR_FORMAT;
             break;
         }
@@ -248,14 +300,16 @@ done:
     return result;
 }
 
-typedef struct {
+typedef struct
+{
     uint8_t target[11];
     bool allow_deleted;
     Fat12DirEntry found;
     bool matched;
 } FindContext;
 
-static Fat12Status find_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool *stop) {
+static Fat12Status find_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool *stop)
+{
     /* TODO 3: comparar nombres cortos 8.3.
      * Para entradas activas deben coincidir los 11 bytes.
      * Para una entrada borrada, el primer byte se perdio (0xE5): compare los 10 restantes.
@@ -268,45 +322,56 @@ static Fat12Status find_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool 
 
 static Fat12Status find_in_directory(const Fat12Fs *fs, bool root, uint16_t cluster,
                                      const char *component, bool allow_deleted,
-                                     Fat12DirEntry *entry) {
+                                     Fat12DirEntry *entry)
+{
     FindContext ctx;
     memset(&ctx, 0, sizeof(ctx));
     Fat12Status status = path_component_to_raw(component, ctx.target);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
     ctx.allow_deleted = allow_deleted;
     status = visit_directory(fs, root, cluster, find_visitor, &ctx);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
-    if (!ctx.matched) {
+    if (!ctx.matched)
+    {
         return FAT12_ERR_NOT_FOUND;
     }
     *entry = ctx.found;
     return FAT12_OK;
 }
 
-static Fat12Status split_path(const char *path, char ***components, size_t *count) {
+static Fat12Status split_path(const char *path, char ***components, size_t *count)
+{
     *components = NULL;
     *count = 0;
-    if (!path || path[0] != '/') {
+    if (!path || path[0] != '/')
+    {
         return FAT12_ERR_FORMAT;
     }
     char *copy = strdup(path);
-    if (!copy) {
+    if (!copy)
+    {
         return FAT12_ERR_IO;
     }
     char **parts = calloc(MAX_PATH_COMPONENTS, sizeof(*parts));
-    if (!parts) {
+    if (!parts)
+    {
         free(copy);
         return FAT12_ERR_IO;
     }
     char *save = NULL;
     char *token = strtok_r(copy, "/", &save);
-    while (token) {
-        if (*count >= MAX_PATH_COMPONENTS) {
-            for (size_t i = 0; i < *count; ++i) {
+    while (token)
+    {
+        if (*count >= MAX_PATH_COMPONENTS)
+        {
+            for (size_t i = 0; i < *count; ++i)
+            {
                 free(parts[i]);
             }
             free(parts);
@@ -314,8 +379,10 @@ static Fat12Status split_path(const char *path, char ***components, size_t *coun
             return FAT12_ERR_FORMAT;
         }
         parts[*count] = strdup(token);
-        if (!parts[*count]) {
-            for (size_t i = 0; i < *count; ++i) {
+        if (!parts[*count])
+        {
+            for (size_t i = 0; i < *count; ++i)
+            {
                 free(parts[i]);
             }
             free(parts);
@@ -330,25 +397,31 @@ static Fat12Status split_path(const char *path, char ***components, size_t *coun
     return FAT12_OK;
 }
 
-static void free_path_components(char **components, size_t count) {
-    if (!components) {
+static void free_path_components(char **components, size_t count)
+{
+    if (!components)
+    {
         return;
     }
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i)
+    {
         free(components[i]);
     }
     free(components);
 }
 
 static Fat12Status resolve_path(const Fat12Fs *fs, const char *path, bool allow_deleted_final,
-                                Fat12DirEntry *entry, bool *is_root) {
+                                Fat12DirEntry *entry, bool *is_root)
+{
     char **parts = NULL;
     size_t count = 0;
     Fat12Status status = split_path(path, &parts, &count);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
-    if (count == 0) {
+    if (count == 0)
+    {
         *is_root = true;
         memset(entry, 0, sizeof(*entry));
         free_path_components(parts, count);
@@ -357,19 +430,24 @@ static Fat12Status resolve_path(const Fat12Fs *fs, const char *path, bool allow_
     bool root = true;
     uint16_t cluster = 0;
     Fat12DirEntry current;
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; i < count; ++i)
+    {
         bool allow_deleted = allow_deleted_final && i + 1u == count;
         status = find_in_directory(fs, root, cluster, parts[i], allow_deleted, &current);
-        if (status != FAT12_OK) {
+        if (status != FAT12_OK)
+        {
             free_path_components(parts, count);
             return status;
         }
-        if (i + 1u < count) {
-            if (current.deleted) {
+        if (i + 1u < count)
+        {
+            if (current.deleted)
+            {
                 free_path_components(parts, count);
                 return FAT12_ERR_NOT_FOUND;
             }
-            if (!current.directory) {
+            if (!current.directory)
+            {
                 free_path_components(parts, count);
                 return FAT12_ERR_NOT_DIR;
             }
@@ -383,10 +461,37 @@ static Fat12Status resolve_path(const Fat12Fs *fs, const char *path, bool allow_
     return FAT12_OK;
 }
 
-Fat12Status fat12_open(Fat12Fs *fs, const char *image_path) {
+Fat12Status set_fat12_image_size(Fat12Fs *fs)
+{
+    if (fseeko(fs->fp, 0, SEEK_END) != 0)
+    {
+        fat12_close(fs);
+        return FAT12_ERR_IO;
+    }
+    fs->image_size = (uint64_t)ftello(fs->fp);
+    printf("El archivo pesa %ld bytes\n", fs->image_size);
+    if (fseeko(fs->fp, 0, SEEK_SET) != 0)
+    {
+        fat12_close(fs);
+        return FAT12_ERR_IO;
+    }
+    return FAT12_OK;
+}
+
+Fat12Status check_fat12_mbr(Fat12Fs *fs)
+{
+    if (fseeko(fs->fp, MBR_SIGNATURE_OFFSET, SEEK_SET) != 0)
+    {
+        fat12_close(fs);
+        return FAT12_ERR_IO;
+    }
+}
+
+Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
+{
     /* TODO 1: abrir la imagen en modo solo lectura y reconstruir el layout.
      * Pasos minimos:
-     *  - obtener el tamano de la imagen;
+     *  + obtener el tamano de la imagen ;
      *  - validar firma del MBR;
      *  - leer LBA inicial y cantidad de sectores de la primera particion;
      *  - leer y validar el Boot Sector de la particion;
@@ -396,52 +501,69 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path) {
      *  - calcular first_fat_sector, first_root_sector y first_data_sector;
      *  - validar que ninguna region quede fuera del archivo.
      */
-    if (!fs || !image_path) {
+    if (!fs || !image_path)
+    {
         return FAT12_ERR_USAGE;
     }
     memset(fs, 0, sizeof(*fs));
     fs->fp = fopen(image_path, "rb");
-    if (!fs->fp) {
+    if (!fs->fp)
+    {
         return FAT12_ERR_IO;
     }
-    if (fseeko(fs->fp, 0, SEEK_END) != 0) {
-        fat12_close(fs);
-        return FAT12_ERR_IO;
+    Fat12Status imageSize = set_fat12_image_size(fs);
+    if (imageSize != FAT12_OK)
+    {
+        return imageSize;
     }
-    fs->image_size = (uint64_t)ftello(fs->fp);
-    if (fseeko(fs->fp, 0, SEEK_SET) != 0) {
-        fat12_close(fs);
-        return FAT12_ERR_IO;
-    }
+
     return FAT12_ERR_NOT_IMPLEMENTED;
 }
 
-void fat12_close(Fat12Fs *fs) {
-    if (fs && fs->fp) {
+void fat12_close(Fat12Fs *fs)
+{
+    if (fs && fs->fp)
+    {
         fclose(fs->fp);
         fs->fp = NULL;
     }
 }
 
-const char *fat12_status_string(Fat12Status status) {
-    switch (status) {
-        case FAT12_OK: return "ok";
-        case FAT12_ERR_USAGE: return "uso invalido";
-        case FAT12_ERR_UNSUPPORTED: return "tipo FAT no soportado; se requiere FAT12";
-        case FAT12_ERR_IO: return "error de entrada/salida";
-        case FAT12_ERR_FORMAT: return "imagen o ruta con formato invalido";
-        case FAT12_ERR_NOT_FOUND: return "archivo o directorio no encontrado";
-        case FAT12_ERR_NOT_DIR: return "un componente de la ruta no es un directorio";
-        case FAT12_ERR_IS_DIR: return "la ruta corresponde a un directorio";
-        case FAT12_ERR_RANGE: return "lectura fuera de los limites de la imagen";
-        case FAT12_ERR_RECOVERY: return "no se cumplen las condiciones de recuperacion simple";
-        case FAT12_ERR_NOT_IMPLEMENTED: return "funcion pendiente de implementar";
-        default: return "error desconocido";
+const char *fat12_status_string(Fat12Status status)
+{
+    switch (status)
+    {
+    case FAT12_OK:
+        return "ok";
+    case FAT12_ERR_USAGE:
+        return "uso invalido";
+    case FAT12_ERR_UNSUPPORTED:
+        return "tipo FAT no soportado; se requiere FAT12";
+    case FAT12_ERR_IO:
+        return "error de entrada/salida";
+    case FAT12_ERR_FORMAT:
+        return "imagen o ruta con formato invalido";
+    case FAT12_ERR_NOT_FOUND:
+        return "archivo o directorio no encontrado";
+    case FAT12_ERR_NOT_DIR:
+        return "un componente de la ruta no es un directorio";
+    case FAT12_ERR_IS_DIR:
+        return "la ruta corresponde a un directorio";
+    case FAT12_ERR_RANGE:
+        return "lectura fuera de los limites de la imagen";
+    case FAT12_ERR_RECOVERY:
+        return "no se cumplen las condiciones de recuperacion simple";
+    case FAT12_ERR_NOT_IMPLEMENTED:
+        return "funcion pendiente de implementar";
+    default:
+        return "error desconocido";
     }
 }
 
-Fat12Status fat12_print_info(const Fat12Fs *fs, FILE *out) {
-    if (!fs || !fs->fp || !out) {
+Fat12Status fat12_print_info(const Fat12Fs *fs, FILE *out)
+{
+    if (!fs || !fs->fp || !out)
+    {
         return FAT12_ERR_USAGE;
     }
     fprintf(out, "fat_type=FAT12\n");
@@ -460,11 +582,13 @@ Fat12Status fat12_print_info(const Fat12Fs *fs, FILE *out) {
     return FAT12_OK;
 }
 
-typedef struct {
+typedef struct
+{
     FILE *out;
 } ListContext;
 
-static Fat12Status list_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool *stop) {
+static Fat12Status list_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool *stop)
+{
     (void)stop;
     ListContext *ctx = ctx_ptr;
     const char *type = entry->deleted ? "DELETED" : (entry->directory ? "DIR" : "FILE");
@@ -473,17 +597,21 @@ static Fat12Status list_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool 
     return FAT12_OK;
 }
 
-Fat12Status fat12_list(const Fat12Fs *fs, const char *path, FILE *out) {
-    if (!fs || !path || !out) {
+Fat12Status fat12_list(const Fat12Fs *fs, const char *path, FILE *out)
+{
+    if (!fs || !path || !out)
+    {
         return FAT12_ERR_USAGE;
     }
     Fat12DirEntry entry;
     bool root = false;
     Fat12Status status = resolve_path(fs, path, false, &entry, &root);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
-    if (!root && !entry.directory) {
+    if (!root && !entry.directory)
+    {
         return FAT12_ERR_NOT_DIR;
     }
     fprintf(out, "TYPE\tSIZE\tCLUSTER\tNAME\n");
@@ -492,55 +620,67 @@ Fat12Status fat12_list(const Fat12Fs *fs, const char *path, FILE *out) {
 }
 
 static Fat12Status read_active_entry(const Fat12Fs *fs, const Fat12DirEntry *entry,
-                                     uint8_t **data, size_t *size) {
+                                     uint8_t **data, size_t *size)
+{
     /* TODO 4: leer un archivo activo siguiendo su cadena de clusters.
      * Debe respetar entry->size, detectar ciclos, fin de cadena prematuro,
      * clusters reservados/defectuosos y lecturas fuera de la imagen.
      */
     (void)fs;
     (void)entry;
-    if (data) {
+    if (data)
+    {
         *data = NULL;
     }
-    if (size) {
+    if (size)
+    {
         *size = 0;
     }
     return FAT12_ERR_NOT_IMPLEMENTED;
 }
 
-Fat12Status fat12_read_file(const Fat12Fs *fs, const char *path, uint8_t **data, size_t *size) {
-    if (!fs || !path || !data || !size) {
+Fat12Status fat12_read_file(const Fat12Fs *fs, const char *path, uint8_t **data, size_t *size)
+{
+    if (!fs || !path || !data || !size)
+    {
         return FAT12_ERR_USAGE;
     }
     Fat12DirEntry entry;
     bool root = false;
     Fat12Status status = resolve_path(fs, path, false, &entry, &root);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
-    if (root || entry.directory || entry.deleted) {
+    if (root || entry.directory || entry.deleted)
+    {
         return FAT12_ERR_IS_DIR;
     }
     return read_active_entry(fs, &entry, data, size);
 }
 
-static Fat12Status write_output_file(const char *output_path, const uint8_t *data, size_t size) {
+static Fat12Status write_output_file(const char *output_path, const uint8_t *data, size_t size)
+{
     FILE *out = fopen(output_path, "wb");
-    if (!out) {
+    if (!out)
+    {
         return FAT12_ERR_IO;
     }
     bool ok = fwrite(data, 1, size, out) == size;
-    if (fclose(out) != 0) {
+    if (fclose(out) != 0)
+    {
         ok = false;
     }
     return ok ? FAT12_OK : FAT12_ERR_IO;
 }
 
-Fat12Status fat12_extract(const Fat12Fs *fs, const char *path, const char *output_path) {
+Fat12Status fat12_extract(const Fat12Fs *fs, const char *path, const char *output_path)
+{
     uint8_t *data = NULL;
     size_t size = 0;
     Fat12Status status = fat12_read_file(fs, path, &data, &size);
-    if (status != FAT12_OK) {
+    if (status != FAT12_OK)
+    {
         return status;
     }
     status = write_output_file(output_path, data, size);
@@ -548,7 +688,8 @@ Fat12Status fat12_extract(const Fat12Fs *fs, const char *path, const char *outpu
     return status;
 }
 
-Fat12Status fat12_recover_deleted(const Fat12Fs *fs, const char *path, const char *output_path) {
+Fat12Status fat12_recover_deleted(const Fat12Fs *fs, const char *path, const char *output_path)
+{
     /* TODO 5: recuperar un archivo borrado bajo el modelo acotado del TP.
      * Condiciones: nombre 8.3 conocido, archivo regular, clusters contiguos,
      * clusters todavia libres en la FAT e imagen abierta solo para lectura.
