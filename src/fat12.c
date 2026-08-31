@@ -465,26 +465,34 @@ Fat12Status set_fat12_image_size(Fat12Fs *fs)
 {
     if (fseeko(fs->fp, 0, SEEK_END) != 0)
     {
-        fat12_close(fs);
         return FAT12_ERR_IO;
     }
+
     fs->image_size = (uint64_t)ftello(fs->fp);
     printf("El archivo pesa %ld bytes\n", fs->image_size);
+
     if (fseeko(fs->fp, 0, SEEK_SET) != 0)
     {
-        fat12_close(fs);
         return FAT12_ERR_IO;
     }
     return FAT12_OK;
 }
 
-Fat12Status check_fat12_mbr(Fat12Fs *fs)
+Fat12Status check_fat12_mbr_signature(Fat12Fs *fs)
 {
-    if (fseeko(fs->fp, MBR_SIGNATURE_OFFSET, SEEK_SET) != 0)
+    uint8_t signature[2];
+
+    if (!read_exact(fs->fp, MBR_SIGNATURE_OFFSET,
+                    signature, sizeof(signature)))
     {
-        fat12_close(fs);
         return FAT12_ERR_IO;
     }
+    if (signature[0] != 0x55u || signature[1] != 0xAAu)
+    {
+        return FAT12_ERR_FORMAT;
+    }
+
+    return FAT12_OK;
 }
 
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
@@ -492,7 +500,7 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
     /* TODO 1: abrir la imagen en modo solo lectura y reconstruir el layout.
      * Pasos minimos:
      *  + obtener el tamano de la imagen ;
-     *  - validar firma del MBR;
+     *  + validar firma del MBR;
      *  - leer LBA inicial y cantidad de sectores de la primera particion;
      *  - leer y validar el Boot Sector de la particion;
      *  - interpretar el BPB con funciones little-endian;
@@ -514,7 +522,15 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
     Fat12Status imageSize = set_fat12_image_size(fs);
     if (imageSize != FAT12_OK)
     {
+        fat12_close(fs);
         return imageSize;
+    }
+
+    Fat12Status status = check_fat12_mbr_signature(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
     }
 
     return FAT12_ERR_NOT_IMPLEMENTED;
