@@ -469,7 +469,7 @@ Fat12Status set_fat12_image_size(Fat12Fs *fs)
     }
 
     fs->image_size = (uint64_t)ftello(fs->fp);
-    printf("El archivo pesa %ld sectores\n", fs->image_size);
+    printf("El archivo pesa %ld bytes\n", fs->image_size);
 
     if (fseeko(fs->fp, 0, SEEK_SET) != 0)
     {
@@ -523,6 +523,56 @@ Fat12Status read_partition(Fat12Fs *fs)
 
 Fat12Status read_BPB(Fat12Fs *fs)
 {
+    // 512 son los bytes del sector
+    uint64_t bpb_offset = fs->partition_lba * 512u;
+
+    if (bpb_offset > fs->image_size)
+    {
+        return FAT12_ERR_RANGE;
+    }
+
+    uint8_t bpb[512];
+    if (!read_exact(fs->fp, MBR_PARTITION_TABLE_OFFSET + bpb_offset,
+                    bpb, sizeof(bpb)))
+    {
+        return FAT12_ERR_IO;
+    }
+
+    if (bpb[511] != 0x55u || bpb[512] != 0xAAu)
+    {
+        return FAT12_ERR_FORMAT;
+    }
+
+    fs->bytes_per_sector = read_le16(&bpb[0x0B]);
+    fs->sectors_per_cluster = bpb[0x0D];
+    fs->reserved_sectors = read_le16(&bpb[0x0E]);
+    fs->fat_count = bpb[0x10];
+    fs->root_entry_count = read_le16(&bpb[0x11]);
+    fs->sectors_per_fat = read_le16(&bpb[0x16]);
+    uint16_t total_sectors_16 = read_le16(&bpb[0x13]);
+
+    if (total_sectors_16 != 0)
+    {
+        fs->total_sectors = total_sectors_16;
+    }
+    else
+    {
+        fs->total_sectors = read_le32(&bpb[0x20]);
+    }
+
+    if (fs->bytes_per_sector == 0 ||
+        fs->sectors_per_cluster == 0 ||
+        fs->reserved_sectors == 0 ||
+        fs->fat_count == 0 ||
+        fs->sectors_per_fat == 0 ||
+        fs->total_sectors == 0)
+    {
+        return FAT12_ERR_FORMAT;
+    }
+
+    memcpy(fs->volume_label, &bpb[0x2B], 11);
+    fs->volume_label[11] = '\0';
+    return FAT12_OK;
 }
 
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
@@ -532,8 +582,8 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
      *  + obtener el tamano de la imagen ;
      *  + validar firma del MBR;
      *  + leer LBA inicial y cantidad de sectores de la primera particion;
-     *  - leer y validar el Boot Sector de la particion;
-     *  - interpretar el BPB con funciones little-endian;
+     *  + leer y validar el Boot Sector de la particion;
+     *  + interpretar el BPB con funciones little-endian;
      *  - calcular root_dir_sectors, data_sectors y cluster_count;
      *  - aceptar solo FAT12 (cluster_count < 4085);
      *  - calcular first_fat_sector, first_root_sector y first_data_sector;
