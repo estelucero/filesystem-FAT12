@@ -469,7 +469,7 @@ Fat12Status set_fat12_image_size(Fat12Fs *fs)
     }
 
     fs->image_size = (uint64_t)ftello(fs->fp);
-    printf("El archivo pesa %ld bytes\n", fs->image_size);
+    printf("El archivo pesa %ld sectores\n", fs->image_size);
 
     if (fseeko(fs->fp, 0, SEEK_SET) != 0)
     {
@@ -495,13 +495,43 @@ Fat12Status check_fat12_mbr_signature(Fat12Fs *fs)
     return FAT12_OK;
 }
 
+Fat12Status read_partition(Fat12Fs *fs)
+{
+    uint8_t initial_lba[4];
+
+    if (!read_exact(fs->fp, MBR_PARTITION_TABLE_OFFSET + 8u,
+                    initial_lba, sizeof(initial_lba)))
+    {
+        return FAT12_ERR_IO;
+    }
+    fs->partition_lba = read_le32(initial_lba);
+
+    uint8_t sector_count[4];
+
+    if (!read_exact(fs->fp, MBR_PARTITION_TABLE_OFFSET + 12u,
+                    sector_count, sizeof(sector_count)))
+    {
+        return FAT12_ERR_IO;
+    }
+
+    fs->partition_sectors = read_le32(sector_count);
+
+    printf("La Direccion logica de LBA %u sectores y sectores de particion %u sectores\n", fs->partition_lba, fs->partition_sectors);
+
+    return FAT12_OK;
+}
+
+Fat12Status read_BPB(Fat12Fs *fs)
+{
+}
+
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
 {
     /* TODO 1: abrir la imagen en modo solo lectura y reconstruir el layout.
      * Pasos minimos:
      *  + obtener el tamano de la imagen ;
      *  + validar firma del MBR;
-     *  - leer LBA inicial y cantidad de sectores de la primera particion;
+     *  + leer LBA inicial y cantidad de sectores de la primera particion;
      *  - leer y validar el Boot Sector de la particion;
      *  - interpretar el BPB con funciones little-endian;
      *  - calcular root_dir_sectors, data_sectors y cluster_count;
@@ -519,14 +549,21 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
     {
         return FAT12_ERR_IO;
     }
-    Fat12Status imageSize = set_fat12_image_size(fs);
-    if (imageSize != FAT12_OK)
+    Fat12Status status = set_fat12_image_size(fs);
+    if (status != FAT12_OK)
     {
         fat12_close(fs);
-        return imageSize;
+        return status;
     }
 
-    Fat12Status status = check_fat12_mbr_signature(fs);
+    status = check_fat12_mbr_signature(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
+    }
+
+    status = read_partition(fs);
     if (status != FAT12_OK)
     {
         fat12_close(fs);
