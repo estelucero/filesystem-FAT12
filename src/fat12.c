@@ -769,6 +769,7 @@ Fat12Status fat12_print_info(const Fat12Fs *fs, FILE *out)
         return FAT12_ERR_USAGE;
     }
     fprintf(out, "fat_type=FAT12\n");
+    fprintf(out, "image_size=%" PRIu64 " B\n", fs->image_size);
     fprintf(out, "partition_lba=%" PRIu32 "\n", fs->partition_lba);
     fprintf(out, "partition_sectors=%" PRIu32 "\n", fs->partition_sectors);
     fprintf(out, "bytes_per_sector=%" PRIu16 "\n", fs->bytes_per_sector);
