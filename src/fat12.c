@@ -469,7 +469,7 @@ Fat12Status set_fat12_image_size(Fat12Fs *fs)
     }
 
     fs->image_size = (uint64_t)ftello(fs->fp);
-    printf("El archivo pesa %ld bytes\n", fs->image_size);
+    // printf("El archivo pesa %ld bytes\n", fs->image_size);
 
     if (fseeko(fs->fp, 0, SEEK_SET) != 0)
     {
@@ -516,7 +516,7 @@ Fat12Status read_partition(Fat12Fs *fs)
 
     fs->partition_sectors = read_le32(sector_count);
 
-    printf("La Direccion logica de LBA %u sectores y tamaño de particion  %u sectores\n", fs->partition_lba, fs->partition_sectors);
+    // printf("La Direccion logica de LBA %u sectores y tamaño de particion  %u sectores\n", fs->partition_lba, fs->partition_sectors);
 
     return FAT12_OK;
 }
@@ -769,7 +769,7 @@ Fat12Status fat12_print_info(const Fat12Fs *fs, FILE *out)
         return FAT12_ERR_USAGE;
     }
     fprintf(out, "fat_type=FAT12\n");
-    fprintf(out, "image_size=%" PRIu64 " B\n", fs->image_size);
+    fprintf(out, "iamge_size=%" PRIu64 " B\n", fs->image_size);
     fprintf(out, "partition_lba=%" PRIu32 "\n", fs->partition_lba);
     fprintf(out, "partition_sectors=%" PRIu32 "\n", fs->partition_sectors);
     fprintf(out, "bytes_per_sector=%" PRIu16 "\n", fs->bytes_per_sector);
