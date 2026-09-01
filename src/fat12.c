@@ -579,6 +579,18 @@ Fat12Status read_BPB(Fat12Fs *fs)
 
 Fat12Status calculate_count_sectors(Fat12Fs *fs)
 {
+    fs->root_dir_sectors = (fs->root_entry_count * ROOT_ENTRY + fs->bytes_per_sector - 1u) / fs->bytes_per_sector;
+
+    uint32_t fat_sectors = fs->fat_count * fs->sectors_per_fat;
+    uint32_t non_data_sectors = fs->reserved_sectors + fat_sectors + fs->root_dir_sectors;
+    if (fs->total_sectors < non_data_sectors)
+    {
+        return FAT12_ERR_FORMAT;
+    }
+
+    fs->data_sectors = fs->total_sectors - non_data_sectors;
+
+    fs->cluster_count = fs->data_sectors / fs->sectors_per_cluster;
 }
 
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
@@ -590,7 +602,7 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
      *  + leer LBA inicial y cantidad de sectores de la primera particion;
      *  + leer y validar el Boot Sector de la particion;
      *  + interpretar el BPB con funciones little-endian;
-     *  - calcular root_dir_sectors, data_sectors y cluster_count;
+     *  + calcular root_dir_sectors, data_sectors y cluster_count;
      *  - aceptar solo FAT12 (cluster_count < 4085);
      *  - calcular first_fat_sector, first_root_sector y first_data_sector;
      *  - validar que ninguna region quede fuera del archivo.
@@ -627,6 +639,13 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
     }
 
     status = read_BPB(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
+    }
+
+    status = calculate_count_sectors(fs);
     if (status != FAT12_OK)
     {
         fat12_close(fs);
