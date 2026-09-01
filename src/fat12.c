@@ -615,6 +615,30 @@ Fat12Status calculate_first_sectors(Fat12Fs *fs)
     return FAT12_OK;
 }
 
+Fat12Status check_ranges(Fat12Fs *fs)
+{
+
+    uint64_t quantity_sectors_image = fs->image_size / fs->bytes_per_sector;
+    uint64_t end_partition = (uint64_t)fs->partition_lba + fs->total_sectors;
+    if (end_partition > quantity_sectors_image)
+    {
+        return FAT12_ERR_RANGE;
+    }
+
+    uint64_t data_end =
+        (uint64_t)fs->first_data_sector + fs->data_sectors;
+
+    if (fs->first_fat_sector < fs->partition_lba ||
+        fs->first_root_sector < fs->first_fat_sector ||
+        fs->first_data_sector < fs->first_root_sector ||
+        data_end > end_partition)
+    {
+        return FAT12_ERR_RANGE;
+    }
+
+    return FAT12_OK;
+}
+
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
 {
     /* TODO 1: abrir la imagen en modo solo lectura y reconstruir el layout.
@@ -627,7 +651,7 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
      *  + calcular root_dir_sectors, data_sectors y cluster_count;
      *  + aceptar solo FAT12 (cluster_count < 4085);
      *  + calcular first_fat_sector, first_root_sector y first_data_sector;
-     *  - validar que ninguna region quede fuera del archivo.
+     *  + validar que ninguna region quede fuera del archivo.
      */
     if (!fs || !image_path)
     {
@@ -688,7 +712,14 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
         return status;
     }
 
-    return FAT12_ERR_NOT_IMPLEMENTED;
+    status = check_ranges(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
+    }
+
+    return FAT12_OK;
 }
 
 void fat12_close(Fat12Fs *fs)
