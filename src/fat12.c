@@ -16,6 +16,7 @@
 #define FAT12_EOC_MIN 0x0FF8u
 #define FAT12_BAD_CLUSTER 0x0FF7u
 #define MAX_PATH_COMPONENTS 64u
+#define ROOT_ENTRY 32u
 
 static uint16_t read_le16(const uint8_t *p)
 {
@@ -532,32 +533,32 @@ Fat12Status read_BPB(Fat12Fs *fs)
     }
 
     uint8_t bpb[512];
-    if (!read_exact(fs->fp, MBR_PARTITION_TABLE_OFFSET + bpb_offset,
+    if (!read_exact(fs->fp, bpb_offset,
                     bpb, sizeof(bpb)))
     {
         return FAT12_ERR_IO;
     }
 
-    if (bpb[511] != 0x55u || bpb[512] != 0xAAu)
+    if (bpb[510] != 0x55u || bpb[511] != 0xAAu)
     {
         return FAT12_ERR_FORMAT;
     }
 
-    fs->bytes_per_sector = read_le16(&bpb[0x0B]);
+    fs->bytes_per_sector = read_le16(bpb + 0x0B);
     fs->sectors_per_cluster = bpb[0x0D];
-    fs->reserved_sectors = read_le16(&bpb[0x0E]);
+    fs->reserved_sectors = read_le16(bpb + 0x0E);
     fs->fat_count = bpb[0x10];
-    fs->root_entry_count = read_le16(&bpb[0x11]);
-    fs->sectors_per_fat = read_le16(&bpb[0x16]);
-    uint16_t total_sectors_16 = read_le16(&bpb[0x13]);
+    fs->root_entry_count = read_le16(bpb + 0x11);
+    fs->sectors_per_fat = read_le16(bpb + 0x16);
+    uint16_t total_sectors_16 = read_le16(bpb + 0x13);
 
     if (total_sectors_16 != 0)
     {
         fs->total_sectors = total_sectors_16;
     }
     else
-    {
-        fs->total_sectors = read_le32(&bpb[0x20]);
+    { // Esto se hace generalmente cuando tenemos Fat16
+        fs->total_sectors = read_le32(bpb + 0x20);
     }
 
     if (fs->bytes_per_sector == 0 ||
@@ -569,10 +570,15 @@ Fat12Status read_BPB(Fat12Fs *fs)
     {
         return FAT12_ERR_FORMAT;
     }
-
-    memcpy(fs->volume_label, &bpb[0x2B], 11);
+    // Nombre del volumen
+    memcpy(fs->volume_label, bpb + 0x2B, 11);
     fs->volume_label[11] = '\0';
+
     return FAT12_OK;
+}
+
+Fat12Status calculate_count_sectors(Fat12Fs *fs)
+{
 }
 
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
