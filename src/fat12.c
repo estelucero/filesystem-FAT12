@@ -16,7 +16,6 @@
 #define FAT12_EOC_MIN 0x0FF8u
 #define FAT12_BAD_CLUSTER 0x0FF7u
 #define MAX_PATH_COMPONENTS 64u
-#define ROOT_ENTRY 32u
 
 static uint16_t read_le16(const uint8_t *p)
 {
@@ -517,7 +516,7 @@ Fat12Status read_partition(Fat12Fs *fs)
 
     fs->partition_sectors = read_le32(sector_count);
 
-    printf("La Direccion logica de LBA %u sectores y sectores de particion %u sectores\n", fs->partition_lba, fs->partition_sectors);
+    printf("La Direccion logica de LBA %u sectores y tamaño de particion  %u sectores\n", fs->partition_lba, fs->partition_sectors);
 
     return FAT12_OK;
 }
@@ -579,7 +578,7 @@ Fat12Status read_BPB(Fat12Fs *fs)
 
 Fat12Status calculate_count_sectors(Fat12Fs *fs)
 {
-    fs->root_dir_sectors = (fs->root_entry_count * ROOT_ENTRY + fs->bytes_per_sector - 1u) / fs->bytes_per_sector;
+    fs->root_dir_sectors = (fs->root_entry_count * DIR_ENTRY_SIZE + fs->bytes_per_sector - 1u) / fs->bytes_per_sector;
 
     uint32_t fat_sectors = fs->fat_count * fs->sectors_per_fat;
     uint32_t non_data_sectors = fs->reserved_sectors + fat_sectors + fs->root_dir_sectors;
@@ -603,6 +602,19 @@ Fat12Status check_if_fat12(Fat12Fs *fs)
     return FAT12_OK;
 }
 
+Fat12Status calculate_first_sectors(Fat12Fs *fs)
+{
+    fs->first_fat_sector = fs->partition_lba + fs->reserved_sectors;
+
+    uint32_t fat_sectors = fs->fat_count * fs->sectors_per_fat;
+
+    fs->first_root_sector = fs->first_fat_sector + fat_sectors;
+
+    fs->first_data_sector = fs->root_dir_sectors + fs->first_root_sector;
+
+    return FAT12_OK;
+}
+
 Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
 {
     /* TODO 1: abrir la imagen en modo solo lectura y reconstruir el layout.
@@ -614,7 +626,7 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
      *  + interpretar el BPB con funciones little-endian;
      *  + calcular root_dir_sectors, data_sectors y cluster_count;
      *  + aceptar solo FAT12 (cluster_count < 4085);
-     *  - calcular first_fat_sector, first_root_sector y first_data_sector;
+     *  + calcular first_fat_sector, first_root_sector y first_data_sector;
      *  - validar que ninguna region quede fuera del archivo.
      */
     if (!fs || !image_path)
@@ -663,6 +675,13 @@ Fat12Status fat12_open(Fat12Fs *fs, const char *image_path)
     }
 
     status = check_if_fat12(fs);
+    if (status != FAT12_OK)
+    {
+        fat12_close(fs);
+        return status;
+    }
+
+    status = calculate_first_sectors(fs);
     if (status != FAT12_OK)
     {
         fat12_close(fs);
