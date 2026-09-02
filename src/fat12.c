@@ -65,15 +65,62 @@ static Fat12Status cluster_offset(const Fat12Fs *fs, uint16_t cluster, uint64_t 
     return FAT12_OK;
 }
 
+/*Params:
+ * *fs: puntero de Fat12
+ * cluster: numero de entrada de Fat
+ * *value: puntero donde se escribe el resultado
+ */
+
 static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t *value)
 {
     /* TODO 2: calcular el desplazamiento de una entrada FAT12 y extraer sus 12 bits.
      * Debe distinguir clusters pares e impares, validar limites y leer desde la primera FAT.
      */
-    (void)fs;
-    (void)cluster;
-    (void)value;
-    return FAT12_ERR_NOT_IMPLEMENTED;
+
+    if (!fs || !value)
+    {
+        return FAT12_ERR_NOT_DIR;
+    }
+    if (cluster < 2 || cluster > fs->cluster_count + 2u)
+    {
+        return FAT12_ERR_RANGE;
+    }
+
+    uint64_t fat_size =
+        (uint64_t)fs->sectors_per_fat * fs->bytes_per_sector;
+
+    // 12 bits de entrada
+    uint64_t entry_offset = (cluster * 3) / 2u;
+
+    if (entry_offset + 2u > fat_size)
+    {
+        return FAT12_ERR_RANGE;
+    }
+
+    uint64_t fat_offset =
+        sector_offset(fs, fs->first_fat_sector) + entry_offset;
+
+    uint8_t bytes[2];
+
+    if (!read_exact(fs->fp, fat_offset, bytes, sizeof(bytes)))
+    {
+        return FAT12_ERR_IO;
+    }
+
+    uint16_t pair = read_le16(bytes);
+
+    if ((cluster % 2) == 0u)
+    {
+        // Queremos los 12 bits inferiores
+        *value = pair & 0x0FFFu;
+    }
+    else
+    {
+        // Queremos los bits superiores
+        *value = pair >> 4;
+    }
+
+    return FAT12_OK;
 }
 
 static bool is_eoc(uint16_t value)
