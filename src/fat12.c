@@ -355,15 +355,48 @@ typedef struct
     bool matched;
 } FindContext;
 
+/*
+ * Params:
+ * entry: puntero de directorio actual
+ * ctx_ptr: puntero al contexto de la busqueda
+ * *stop: puntero a booleano para terminar busqueda
+ */
+
 static Fat12Status find_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool *stop)
 {
     /* TODO 3: comparar nombres cortos 8.3.
      * Para entradas activas deben coincidir los 11 bytes.
      * Para una entrada borrada, el primer byte se perdio (0xE5): compare los 10 restantes.
      */
-    (void)entry;
-    (void)ctx_ptr;
-    (void)stop;
+    FindContext *ctx = ctx_ptr;
+    if (entry->deleted && !ctx->allow_deleted)
+    {
+        return FAT12_OK;
+    }
+    bool match;
+
+    if (entry->deleted)
+    {
+        match = memcmp(entry->raw_name + 1,
+                       ctx->target + 1,
+                       10) == 0;
+    }
+    else
+    {
+        match = memcmp(entry->raw_name,
+                       ctx->target,
+                       11) == 0;
+    }
+
+    if (match)
+    {
+        ctx->found = *entry;
+        ctx->matched = true;
+        *stop = true;
+    }
+
+    return FAT12_OK;
+
     return FAT12_OK;
 }
 
