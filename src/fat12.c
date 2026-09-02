@@ -900,6 +900,10 @@ Fat12Status fat12_list(const Fat12Fs *fs, const char *path, FILE *out)
     return visit_directory(fs, root, root ? 0u : entry.first_cluster, list_visitor, &ctx);
 }
 
+/*
+ *
+ */
+
 static Fat12Status read_active_entry(const Fat12Fs *fs, const Fat12DirEntry *entry,
                                      uint8_t **data, size_t *size)
 {
@@ -907,8 +911,7 @@ static Fat12Status read_active_entry(const Fat12Fs *fs, const Fat12DirEntry *ent
      * Debe respetar entry->size, detectar ciclos, fin de cadena prematuro,
      * clusters reservados/defectuosos y lecturas fuera de la imagen.
      */
-    (void)fs;
-    (void)entry;
+
     if (data)
     {
         *data = NULL;
@@ -917,7 +920,120 @@ static Fat12Status read_active_entry(const Fat12Fs *fs, const Fat12DirEntry *ent
     {
         *size = 0;
     }
-    return FAT12_ERR_NOT_IMPLEMENTED;
+
+    if (!fs || !entry || !data || !size)
+    {
+        return FAT12_ERR_USAGE;
+    }
+    if (entry->size == 0)
+    {
+        return FAT12_OK;
+    }
+    if (entry->first_cluster < 2 ||
+        (uint32_t)entry->first_cluster >= fs->cluster_count + 2u)
+    {
+        return FAT12_ERR_FORMAT;
+    }
+
+    uint32_t cluster_size =
+        (uint32_t)fs->bytes_per_sector * fs->sectors_per_cluster;
+
+    uint64_t clusters_needed =
+        ((uint64_t)entry->size + cluster_size - 1u) / cluster_size;
+
+    uint8_t *result = malloc(entry->size);
+    if (!result)
+    {
+        return FAT12_ERR_IO;
+    }
+
+    uint8_t *buffer = malloc(cluster_size);
+    if (!buffer)
+    {
+        free(result);
+        return FAT12_ERR_IO;
+    }
+
+    uint8_t *seen = calloc(fs->cluster_count + 2u, 1);
+    if (!seen)
+    {
+        free(buffer);
+        free(result);
+        return FAT12_ERR_IO;
+    }
+
+    Fat12Status status = FAT12_OK;
+    uint16_t cluster = entry->first_cluster;
+    size_t bytes_read = 0;
+
+    for (uint64_t i = 0; i < clusters_needed; ++i)
+    {
+        if (cluster < 2 ||
+            (uint32_t)cluster >= fs->cluster_count + 2u ||
+            seen[cluster])
+        {
+            status = FAT12_ERR_FORMAT;
+            break;
+        }
+
+        seen[cluster] = 1;
+
+        uint64_t offset;
+        status = cluster_offset(fs, cluster, &offset);
+        if (status != FAT12_OK)
+        {
+            break;
+        }
+
+        if (!read_exact(fs->fp, offset, buffer, cluster_size))
+        {
+            status = FAT12_ERR_IO;
+            break;
+        }
+
+        size_t remaining = entry->size - bytes_read;
+        size_t to_copy = remaining < cluster_size
+                             ? remaining
+                             : cluster_size;
+
+        memcpy(result + bytes_read, buffer, to_copy);
+        bytes_read += to_copy;
+
+        if (i + 1u < clusters_needed)
+        {
+            uint16_t next;
+            status = read_fat_entry(fs, cluster, &next);
+            if (status != FAT12_OK)
+            {
+                break;
+            }
+
+            if (is_eoc(next) ||
+                next == 0u ||
+                next == FAT12_BAD_CLUSTER ||
+                (next >= 0x0FF0u && next < 0x0FF6u))
+            {
+                status = FAT12_ERR_FORMAT;
+                break;
+            }
+
+            cluster = next;
+        }
+    }
+
+    free(seen);
+    free(buffer);
+
+    if (status != FAT12_OK)
+    {
+        free(result);
+        return status;
+    }
+
+    *data = result;
+    *size = bytes_read;
+
+    return FAT12_OK;
 }
 
 Fat12Status fat12_read_file(const Fat12Fs *fs, const char *path, uint8_t **data, size_t *size)
