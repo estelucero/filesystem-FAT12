@@ -1011,7 +1011,7 @@ static Fat12Status read_active_entry(const Fat12Fs *fs, const Fat12DirEntry *ent
             if (is_eoc(next) ||
                 next == 0u ||
                 next == FAT12_BAD_CLUSTER ||
-                (next >= 0x0FF0u && next < 0x0FF6u))
+                (next >= 0x0FF0u && next <= 0x0FF6u))
             {
                 status = FAT12_ERR_FORMAT;
                 break;
