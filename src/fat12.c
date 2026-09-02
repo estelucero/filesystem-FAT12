@@ -396,8 +396,6 @@ static Fat12Status find_visitor(const Fat12DirEntry *entry, void *ctx_ptr, bool 
     }
 
     return FAT12_OK;
-
-    return FAT12_OK;
 }
 
 static Fat12Status find_in_directory(const Fat12Fs *fs, bool root, uint16_t cluster,
