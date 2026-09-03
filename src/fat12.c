@@ -1091,8 +1091,113 @@ Fat12Status fat12_recover_deleted(const Fat12Fs *fs, const char *path, const cha
      * Condiciones: nombre 8.3 conocido, archivo regular, clusters contiguos,
      * clusters todavia libres en la FAT e imagen abierta solo para lectura.
      */
-    (void)fs;
-    (void)path;
-    (void)output_path;
-    return FAT12_ERR_NOT_IMPLEMENTED;
+    if (!fs || !path || !output_path)
+    {
+        return FAT12_ERR_USAGE;
+    }
+
+    Fat12DirEntry entry;
+    bool root = false;
+
+    Fat12Status status =
+        resolve_path(fs, path, true, &entry, &root);
+
+    if (root || !entry.deleted || entry.directory)
+    {
+        return FAT12_ERR_RECOVERY;
+    }
+
+    if (entry.size == 0)
+    {
+        uint8_t empty = 0;
+        return write_output_file(output_path, &empty, 0);
+    }
+
+    uint32_t cluster_size =
+        (uint32_t)fs->bytes_per_sector *
+        fs->sectors_per_cluster;
+
+    uint64_t clusters_needed =
+        ((uint64_t)entry.size + cluster_size - 1u) /
+        cluster_size;
+
+    if (entry.first_cluster < 2 ||
+        (uint32_t)entry.first_cluster >= fs->cluster_count + 2u ||
+        clusters_needed > fs->cluster_count)
+    {
+        return FAT12_ERR_RECOVERY;
+    }
+
+    uint8_t *data = malloc(entry.size);
+    if (!data)
+    {
+        return FAT12_ERR_IO;
+    }
+
+    size_t bytes_read = 0;
+
+    for (uint64_t i = 0; i < clusters_needed; ++i)
+    {
+        uint32_t cluster_number =
+            (uint32_t)entry.first_cluster + (uint32_t)i;
+
+        if (cluster_number >= fs->cluster_count + 2u || cluster_number < 2)
+        {
+            status = FAT12_ERR_RANGE;
+            break;
+        }
+
+        uint16_t fat_value;
+        status = read_fat_entry(fs,
+                                (uint16_t)cluster_number,
+                                &fat_value);
+
+        if (status != FAT12_OK)
+        {
+            status = FAT12_ERR_NOT_FOUND;
+            break;
+        }
+
+        if (fat_value != 0u)
+        {
+            status = FAT12_ERR_RECOVERY;
+            break;
+        }
+        uint64_t offset;
+        status = cluster_offset(fs,
+                                (uint16_t)cluster_number,
+                                &offset);
+
+        if (status != FAT12_OK)
+        {
+            status = FAT12_ERR_RECOVERY;
+            break;
+        }
+
+        size_t remaining = entry.size - bytes_read;
+        size_t to_read = remaining < cluster_size
+                             ? remaining
+                             : cluster_size;
+
+        if (!read_exact(fs->fp,
+                        offset,
+                        data + bytes_read,
+                        to_read))
+        {
+            status = FAT12_ERR_IO;
+            break;
+        }
+
+        bytes_read += to_read;
+    }
+
+    if (status == FAT12_OK)
+    {
+        status = write_output_file(output_path,
+                                   data,
+                                   bytes_read);
+    }
+
+    free(data);
+    return status;
 }
