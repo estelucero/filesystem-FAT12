@@ -89,7 +89,6 @@ static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t 
     uint64_t fat_size =
         (uint64_t)fs->sectors_per_fat * fs->bytes_per_sector;
 
-    // 12 bits de entrada
     uint64_t entry_offset = (cluster * 3) / 2u;
 
     if (entry_offset + 2u > fat_size)
@@ -111,7 +110,7 @@ static Fat12Status read_fat_entry(const Fat12Fs *fs, uint16_t cluster, uint16_t 
 
     if ((cluster % 2) == 0u)
     {
-        // Queremos los 12 bits inferiores
+
         *value = pair & 0x0FFFu;
     }
     else
@@ -634,7 +633,7 @@ Fat12Status read_BPB(Fat12Fs *fs)
         fs->total_sectors = total_sectors_16;
     }
     else
-    { // Esto se hace generalmente cuando tenemos Fat16
+    {
         fs->total_sectors = read_le32(bpb + 0x20);
     }
 
